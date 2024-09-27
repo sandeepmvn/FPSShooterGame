@@ -1,0 +1,273 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Police FPS Game</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #instructions {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 24px;
+            text-align: center;
+        }
+
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        #shoot-info {
+            position: absolute;
+            top: 50px;
+            left: 10px;
+            font-size: 18px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <a href="/">Play FPS Game-1</a>
+  
+    @RenderBody()
+    <div id="instructions" class="mt-2">
+        <p>Click to play</p>
+    </div>
+    <div class="row">
+       
+        <div id="score" class="badge bg-success">Score: 0</div>
+        <div id="shoot-info" class="badge bg-primary">Click or press Space to shoot</div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+        let camera, scene, renderer;
+        let player, velocity = new THREE.Vector3();
+        let controlsEnabled = false;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        const speed = 400.0;
+        const bullets = [];
+        const bulletSpeed = 500;
+        let prevTime = performance.now();
+        let score = 0;
+        const enemies = [];
+        const enemySpeed = 0.5;
+
+        init();
+        animate();
+
+        function init() {
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 1000);
+            player = new THREE.Object3D();
+            player.add(camera);
+            scene.add(player);
+
+            const floorGeometry = new THREE.PlaneGeometry(2000, 2000);
+            const floorMaterial = new THREE.MeshBasicMaterial({ color: 0xA9A9A9 });
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = -10;
+            scene.add(floor);
+
+            const roadMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
+            const roadGeometry = new THREE.PlaneGeometry(2000, 200);
+            const road = new THREE.Mesh(roadGeometry, roadMaterial);
+            road.rotation.x = -Math.PI / 2;
+            road.position.y = -9.9;
+            road.position.z = 0;
+            scene.add(road);
+
+            const instructions = document.getElementById('instructions');
+            instructions.addEventListener('click', function () {
+                instructions.style.display = 'none';
+                document.body.requestPointerLock();
+            });
+
+            document.addEventListener('pointerlockchange', function () {
+                controlsEnabled = document.pointerLockElement === document.body;
+            });
+
+            document.addEventListener('keydown', function (event) {
+                switch (event.code) {
+                    case 'ArrowUp':
+                    case 'KeyW':
+                        moveForward = true;
+                        break;
+                    case 'ArrowLeft':
+                    case 'KeyA':
+                        moveLeft = true;
+                        break;
+                    case 'ArrowDown':
+                    case 'KeyS':
+                        moveBackward = true;
+                        break;
+                    case 'ArrowRight':
+                    case 'KeyD':
+                        moveRight = true;
+                        break;
+                    case 'Space':
+                        shoot();
+                        break;
+                }
+            });
+
+            document.addEventListener('keyup', function (event) {
+                switch (event.code) {
+                    case 'ArrowUp':
+                    case 'KeyW':
+                        moveForward = false;
+                        break;
+                    case 'ArrowLeft':
+                    case 'KeyA':
+                        moveLeft = false;
+                        break;
+                    case 'ArrowDown':
+                    case 'KeyS':
+                        moveBackward = false;
+                        break;
+                    case 'ArrowRight':
+                    case 'KeyD':
+                        moveRight = false;
+                        break;
+                }
+            });
+
+            document.addEventListener('mousemove', function (event) {
+                if (controlsEnabled) {
+                    const movementX = event.movementX || 0;
+                    const movementY = event.movementY || 0;
+                    player.rotation.y -= movementX * 0.002;
+                    camera.rotation.x -= movementY * 0.002;
+                    camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+                }
+            });
+
+            document.addEventListener('mousedown', shoot);
+
+            for (let i = 0; i < 5; i++) {
+                addEnemy();
+            }
+        }
+
+        function addEnemy() {
+            const enemyGeometry = new THREE.BoxGeometry(1, 2, 0.5);
+            const enemyMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+            const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+
+            enemy.position.set(
+                Math.random() * 100 - 50,
+                -8,  // Y position for ground level
+                Math.random() * 100 - 50
+            );
+
+            enemies.push(enemy);
+            scene.add(enemy);
+        }
+
+        function shoot() {
+            const bulletGeometry = new THREE.SphereGeometry(0.2, 8, 8);
+            const bulletMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+
+            bullet.position.copy(camera.position);
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            bullet.userData = {
+                velocity: direction.multiplyScalar(bulletSpeed)
+            };
+
+            bullets.push(bullet);
+            scene.add(bullet);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (controlsEnabled) {
+                const time = performance.now();
+                const delta = (time - prevTime) / 1000;
+
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                if (moveForward) velocity.z -= speed * delta;
+                if (moveBackward) velocity.z += speed * delta;
+                if (moveLeft) velocity.x -= speed * delta;
+                if (moveRight) velocity.x += speed * delta;
+
+                player.translateX(velocity.x * delta);
+                player.translateZ(velocity.z * delta);
+
+                updateBullets(delta);
+                updateEnemies(delta);
+
+                prevTime = time;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function updateBullets(delta) {
+            bullets.forEach((bullet, index) => {
+                bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(delta));
+
+                enemies.forEach((enemy, enemyIndex) => {
+                    if (bullet.position.distanceTo(enemy.position) < 1) {
+                        scene.remove(enemy);
+                        scene.remove(bullet);
+                        enemies.splice(enemyIndex, 1);
+                        bullets.splice(index, 1);
+
+                        score += 1;
+                        document.getElementById('score').innerHTML = `Score: ${score}`;
+                    }
+                });
+            });
+        }
+
+        function updateEnemies(delta) {
+            enemies.forEach(enemy => {
+                const direction = new THREE.Vector3();
+                direction.subVectors(player.position, enemy.position).normalize();
+                enemy.position.addScaledVector(direction, enemySpeed * delta);
+            });
+        }
+    </script>
+</body>
+</html>
